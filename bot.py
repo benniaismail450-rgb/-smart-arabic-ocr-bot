@@ -73,6 +73,12 @@ def handle_docs_photo(message):
 
 # دالة لتشغيل البوت في خلفية مستقلة (Threading)
 def run_telegram_bot():
+  # حذف الويبهاوك القديم لتجنب تعارض 409
+  try:
+    bot.remove_webhook()
+  except:
+    pass
+
   bot.infinity_polling()
 
 
