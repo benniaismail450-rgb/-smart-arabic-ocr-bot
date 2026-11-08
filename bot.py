@@ -1,4 +1,6 @@
+from collections import Counter
 import os
+import re
 from flask import Flask, request
 from PIL import Image
 import pytesseract
@@ -40,15 +42,15 @@ def extract_text_fast(image_path):
   return text
 
 
-# معالج أمر /start والرسائل الترحيبية
+# معالج أمر /start والرسائل الترحيبية الشاملة
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-  bot.reply_to(
-      message,
-      'مرحباً بك! أنا بوت استخراج النصوص من الصور (OCR) وتعديلها.\nأرسل لي أي'
-      ' صورة تحتوي على نص عربي وسأقوم باستخراجه لك فوراً، أو أرسل نصاً لتنفيذ'
-      ' المهام عليه.',
+  welcome_text = (
+      'مرحباً بك! أنا بوت استخراج النصوص من الصور (OCR) وتعديلها وتحليلها.\n\n'
+      '• أرسل لي أي **صورة** تحتوي على نص عربي وسأقوم باستخراجه لك فوراً وبسرعة فائقة.\n'
+      '• أو أرسل لي أي **نص** وسأقوم بتحليله بالكامل (إحصاء الكلمات، الحروف مع وبدون مسافات، ومعرفة أكثر الكلمات تكراراً).'
   )
+  bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
 
 # معالج الصور المرسلة من المستخدم
@@ -80,20 +82,37 @@ def handle_docs_photo(message):
     bot.reply_to(message, f'حدث خطأ أثناء معالجة الصورة: {e}')
 
 
-# معالج النصوص العادية (لإحصاء الحروف، الكلمات، أو أي مهام نصية أخرى)
+# معالج النصوص العادية لإعطاء التحليل المفصل تماماً كالنسخة السابقة
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
   user_text = message.text
 
-  # مثال إحصاء الكلمات والحروف للنص المرسل
-  words_count = len(user_text.split())
-  chars_count = len(user_text)
+  # حساب عدد الكلمات والحروف
+  words = re.findall(r'\w+', user_text)
+  words_count = len(words)
+  chars_with_spaces = len(user_text)
+  chars_without_spaces = len(user_text.replace(' ', ''))
+
+  # استخراج أكثر الكلمات تكراراً
+  filtered_words = [w for w in words if len(w) > 1]
+  word_counts = Counter(filtered_words).most_common(5)
+
+  top_words_str = ''
+  for word, count in word_counts:
+    top_words_str += f'• {word}: تكررت {count} مرات\n'
+
+  if not top_words_str:
+    top_words_str = '• لا توجد كلمات مكررة كافية\n'
 
   response_msg = (
-      f'📄 **تحليل النص المرسل:**\n\n'
-      f'• عدد الكلمات: {words_count}\n'
-      f'• عدد الحروف: {chars_count}\n\n'
-      f'النص:\n{user_text}'
+      '📊 **نتائج تحليل (النص المرسل):**\n\n'
+      f'📝 **إجمالي الكلمات:** {words_count} كلمة\n'
+      f'abc 🔤 **عدد الحروف (مع المسافات):** {chars_with_spaces} حرف\n'
+      f'abc 🔤 **عدد الحروف (بدون مسافات):** {chars_without_spaces} حرف\n\n'
+      '🔥 **أكثر الكلمات تكراراً:**\n'
+      f'{top_words_str}\n'
+      '💬 **النص:**\n'
+      f'{user_text}'
   )
   bot.reply_to(message, response_msg, parse_mode='Markdown')
 
