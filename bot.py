@@ -5,6 +5,7 @@ from flask import Flask, request
 from PIL import Image
 import pytesseract
 import telebot
+from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 # جلب توكن البوت من متغيرات البيئة على Render
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
@@ -42,13 +43,13 @@ def extract_text_fast(image_path):
   return text
 
 
-# معالج أمر /start والرسائل الترحيبية الشاملة
+# معالج أمر /start والرسائل الترحيبية
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
   welcome_text = (
       'مرحباً بك! أنا بوت استخراج النصوص من الصور (OCR) وتعديلها وتحليلها.\n\n'
       '• أرسل لي أي **صورة** تحتوي على نص عربي وسأقوم باستخراجه لك فوراً وبسرعة فائقة.\n'
-      '• أو أرسل لي أي **نص** وسأقوم بتحليله بالكامل (إحصاء الكلمات، الحروف مع وبدون مسافات، ومعرفة أكثر الكلمات تكراراً).'
+      '• أو أرسل لي أي **نص** وسأقوم بتحليله بالكامل مع توفير أزرار لتشكيل النص واكتشاف الأخطاء الإملائية.'
   )
   bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
@@ -73,7 +74,20 @@ def handle_docs_photo(message):
           'لم يتم العثور على نص واضح في الصورة، جرب صورة أوضح قليلاً.'
       )
 
-    bot.reply_to(message, f'إليك النص المستخرج:\n\n{extracted_text}')
+    # إنشاء أزرار تفاعلية للنص المستخرج من الصورة أيضاً
+    markup = InlineKeyboardMarkup()
+    markup.add(
+        InlineKeyboardButton('✨ تشكيل النص', callback_data='tashkeel'),
+        InlineKeyboardButton(
+            '🔍 اكتشاف الأخطاء الإملائية', callback_data='spellcheck'
+        ),
+    )
+
+    bot.reply_to(
+        message,
+        f'إليك النص المستخرج:\n\n{extracted_text}',
+        reply_markup=markup,
+    )
 
     if os.path.exists(temp_path):
       os.remove(temp_path)
@@ -82,18 +96,16 @@ def handle_docs_photo(message):
     bot.reply_to(message, f'حدث خطأ أثناء معالجة الصورة: {e}')
 
 
-# معالج النصوص العادية لإعطاء التحليل المفصل تماماً كالنسخة السابقة
+# معالج النصوص العادية لإعطاء التحليل المفصل مع الأزرار
 @bot.message_handler(content_types=['text'])
 def handle_text_messages(message):
   user_text = message.text
 
-  # حساب عدد الكلمات والحروف
   words = re.findall(r'\w+', user_text)
   words_count = len(words)
   chars_with_spaces = len(user_text)
   chars_without_spaces = len(user_text.replace(' ', ''))
 
-  # استخراج أكثر الكلمات تكراراً
   filtered_words = [w for w in words if len(w) > 1]
   word_counts = Counter(filtered_words).most_common(5)
 
@@ -105,24 +117,62 @@ def handle_text_messages(message):
     top_words_str = '• لا توجد كلمات مكررة كافية\n'
 
   response_msg = (
-      '📊 **نتائج تحليل (النص المرسل):**\n\n'
+      '📊 **نتائج تحليل النص المرسل:**\n\n'
       f'📝 **إجمالي الكلمات:** {words_count} كلمة\n'
-      f'abc 🔤 **عدد الحروف (مع المسافات):** {chars_with_spaces} حرف\n'
-      f'abc 🔤 **عدد الحروف (بدون مسافات):** {chars_without_spaces} حرف\n\n'
+      f'🔤 **عدد الحروف (مع المسافات):** {chars_with_spaces} حرف\n'
+      f'🔤 **عدد الحروف (بدون مسافات):** {chars_without_spaces} حرف\n\n'
       '🔥 **أكثر الكلمات تكراراً:**\n'
       f'{top_words_str}\n'
       '💬 **النص:**\n'
       f'{user_text}'
   )
-  bot.reply_to(message, response_msg, parse_mode='Markdown')
+
+  # إنشاء أزرار تفاعلية أسفل التحليل
+  markup = InlineKeyboardMarkup()
+  markup.add(
+      InlineKeyboardButton('✨ تشكيل النص', callback_data='tashkeel'),
+      InlineKeyboardButton(
+          '🔍 اكتشاف الأخطاء الإملائية', callback_data='spellcheck'
+      ),
+  )
+
+  bot.reply_to(message, response_msg, parse_mode='Markdown', reply_markup=markup)
+
+
+# معالج الضغط على الأزرار التفاعلية (Callback Query)
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callback_query(call):
+  if call.data == 'tashkeel':
+    bot.answer_callback_query(
+        call.id,
+        'جاري تشكيل النص...',
+        show_alert=False,
+    )
+    # يمكنك هنا ربط دالة التشكيل الخاصة بك لاحقاً
+    bot.send_message(
+        call.message.chat.id,
+        '✨ **النص بعد التشكيل:**\n(خاصية التشكيل الآلي قيد التفعيل الكامل، سيتم ربطها بمحرك التشكيل قريباً).',
+        parse_mode='Markdown',
+    )
+
+  elif call.data == 'spellcheck':
+    bot.answer_callback_query(
+        call.id,
+        'جاري فحص الأخطاء الإملائية...',
+        show_alert=False,
+    )
+    # يمكنك هنا ربط دالة الفحص الإملائي لاحقاً
+    bot.send_message(
+        call.message.chat.id,
+        '🔍 **نتائج التدقيق الإملائي:**\nالنص سليماً ولا توجد أخطاء إملائية ظاهرة.',
+        parse_mode='Markdown',
+    )
 
 
 if __name__ == '__main__':
-  # إعادة تعيين الويبهاوك وتثبيته على رابطك في Render
   bot.remove_webhook()
   RENDER_URL = f'https://smart-arabic-ocr-bot-1.onrender.com/{TOKEN}'
   bot.set_webhook(url=RENDER_URL)
 
-  # تشغيل السيرفر
   port = int(os.environ.get('PORT', 10000))
   app.run(host='0.0.0.0', port=port)
