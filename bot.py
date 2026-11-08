@@ -40,13 +40,23 @@ def extract_text_fast(image_path):
   return text
 
 
+# معالج أمر /start والرسائل الترحيبية
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+  bot.reply_to(
+      message,
+      'مرحباً بك! أنا بوت استخراج النصوص من الصور (OCR) وتعديلها.\nأرسل لي أي'
+      ' صورة تحتوي على نص عربي وسأقوم باستخراجه لك فوراً، أو أرسل نصاً لتنفيذ'
+      ' المهام عليه.',
+  )
+
+
 # معالج الصور المرسلة من المستخدم
 @bot.message_handler(content_types=['photo'])
 def handle_docs_photo(message):
   try:
     bot.reply_to(message, 'جاري معالجة الصورة واستخراج النص بسرعة...')
 
-    # استخدام أعلى دقة متوفرة للصورة
     file_info = bot.get_file(message.photo[-1].file_id)
     downloaded_file = bot.download_file(file_info.file_path)
 
@@ -54,7 +64,6 @@ def handle_docs_photo(message):
     with open(temp_path, 'wb') as new_file:
       new_file.write(downloaded_file)
 
-    # استخراج النص
     extracted_text = extract_text_fast(temp_path)
 
     if not extracted_text.strip():
@@ -64,12 +73,29 @@ def handle_docs_photo(message):
 
     bot.reply_to(message, f'إليك النص المستخرج:\n\n{extracted_text}')
 
-    # حذف الملف المؤقت
     if os.path.exists(temp_path):
       os.remove(temp_path)
 
   except Exception as e:
     bot.reply_to(message, f'حدث خطأ أثناء معالجة الصورة: {e}')
+
+
+# معالج النصوص العادية (لإحصاء الحروف، الكلمات، أو أي مهام نصية أخرى)
+@bot.message_handler(content_types=['text'])
+def handle_text_messages(message):
+  user_text = message.text
+
+  # مثال إحصاء الكلمات والحروف للنص المرسل
+  words_count = len(user_text.split())
+  chars_count = len(user_text)
+
+  response_msg = (
+      f'📄 **تحليل النص المرسل:**\n\n'
+      f'• عدد الكلمات: {words_count}\n'
+      f'• عدد الحروف: {chars_count}\n\n'
+      f'النص:\n{user_text}'
+  )
+  bot.reply_to(message, response_msg, parse_mode='Markdown')
 
 
 if __name__ == '__main__':
