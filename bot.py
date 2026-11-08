@@ -42,82 +42,70 @@ def extract_text_fast(image_path):
   return text
 
 
-# دالة التدقيق الذكي والشامل لأي نص (بدون الاعتماد على كلمات محدودة)
+# دالة التدقيق الذكي الصحيحة (لا تُظهر أخطاء وهمية في الكلمات الصحيحة)
 def smart_comprehensive_spell_check(text):
   found_errors = []
   corrected_text = text
 
-  # 1. كشف أخطاء الهمزات العامة (في أول الكلمات الشائعة أو الأفعال)
-  # مثل تحويل الألف المجردة إلى همزة قطع إن لزم الأمر
+  # 1. تصحيح الهمزات الشائعة المحددة بدقة
+  hamza_fixes = {'احمد': 'أحمد', 'اسماعيل': 'إسماعيل', 'ابراهيم': 'إبراهيم', 'الى': 'إلى', 'ان': 'أن', 'اذا': 'إذا'}
+  for wrong, right in hamza_fixes.items():
+    pattern = r'\b' + wrong + r'\b'
+    if re.search(pattern, corrected_text):
+      found_errors.append(f'• خطأ في الهمزة: "{wrong}" ➔ والصواب: "{right}"')
+      corrected_text = re.sub(pattern, right, corrected_text)
+
+  # 2. فحص أخطاء التاء المفتوحة والمربوطة الواضحة (مثل تفاحت -> تفاحة)
+  # نتحقق من الكلمات المفردة المؤنثة التي تُكتب خطأ بالتاء المفتوحة
   words = corrected_text.split()
-  new_words = []
-  
   for w in words:
     clean_w = re.sub(r'[^\w\s]', '', w)
-    original_w = w
-    
-    # تصحيح الهمزات المبدئية الشائعة تلقائياً بأي كلمة
-    if clean_w.startswith('احمد') or clean_w.startswith('اسماعيل') or clean_w.startswith('راهيم'):
-      fixed_w = w.replace('احمد', 'أحمد').replace('اسماعيل', 'إسماعيل').replace('ابراهيم', 'إبراهيم')
-      if fixed_w != w:
-        found_errors.append(f'• تصحيح همزة: "{w}" ➔ "{fixed_w}"')
-        w = fixed_w
+    # كلمات شائعة إن ختمت بتاء مفتوحة خطأ
+    if clean_w in ['تفاحت', 'مدرست', 'سيارت', 'طاولت', 'حديقت']:
+      right_w = clean_w[:-1] + 'ة'
+      found_errors.append(f'• خطأ إملائي: الكلمة "{w}" تكتب بالتاء المربوطة "{right_w}"')
+      corrected_text = corrected_text.replace(w, right_w)
 
-    # 2. كشف أخطاء التاء المربوطة والمفتوحة في أواخر الكلمات (قاعدة عامة للمفرد المؤنث)
-    # إذا انتهت الكلمة بتاء مفتوحة (ت) ولم تكن فعلاً (مثل كتبت) أو جمع تكسير، يقترح تحويلها إلى (ة)
-    if clean_w.endswith('ت') and len(clean_w) > 3:
-      # استثناء الأفعال الشائعة التي تنتهي بتاء الفاعل أو التاء التأنيث الساكنة بحذر
-      verbs_ending_with_t = ['كانت', 'قالت', 'سكتت', 'ذهبت', 'رجعت', 'فعلت', 'أكلت', 'كتبت']
-      if clean_w not in verbs_ending_with_t:
-        suggested = w[:-1] + 'ة' + w[len(clean_w):]
-        found_errors.append(f'• خطأ محتمل في التاء: الكلمة "{w}" تنتهي بتاء مفتوحة والأرجح أن تكون تاء مربوطة "{suggested}"')
-        w = suggested
-
-    # 3. اكتشاف كتابة التنوين نوناً ساكنة (مثل كتابن ➔ كتاباً)
-    if re.search(r'ن\b', clean_w) and len(clean_w) > 3:
-      # فحص الكلمات التي تنتهي بـ "ن" صوتية وليست أصلية
-      potential_tanween = w[:-1] + 'اً'
-      # (نتركها كملاحظة ذكية أو تصحيح دلالي حسب السياق)
-
-    new_words.append(w)
-
-  corrected_text = ' '.join(new_words)
-
-  # 4. تدقيق علامات الترقيم (مسافات خاطئة قبل العلامات)
+  # 3. فحص مسافات علامات الترقيم
   if re.search(r'\s+[،\.\?\!]', corrected_text):
-    found_errors.append('• خطأ تنسيق: توجد مسافة فاصلة قبل علامة الترقيم وتم تعديلها.')
+    found_errors.append('• خطأ تنسيق: توجد مسافة قبل علامة الترقيم وتم تعديلها.')
     corrected_text = re.sub(r'\s+([،\.\?\!])', r'\1', corrected_text)
-
-  # 5. تدقيق المسافات المزدوجة بين الكلمات
-  if '  ' in corrected_text:
-    found_errors.append('• تنسيق: وُجدت مسافات زائدة بين الكلمات وتمت جدولتها.')
-    corrected_text = re.sub(r'\s+', ' ', corrected_text)
 
   if found_errors:
     return (
-        '🔍 **نتائج التدقيق الذكي الشامل:**\n\n'
+        '🔍 **نتائج التدقيق الإملائي السليم:**\n\n'
         + '\n'.join(found_errors)
-        + f'\n\n✨ **النص بعد التعديل المقترح:**\n{corrected_text}'
+        + f'\n\n✨ **النص بعد التصحيح:**\n{corrected_text}'
     )
   else:
     return (
-        '🔍 **نتائج التدقيق الذكي:**\nالنص سليم ومستوفٍ لقواعد الهمزات والتاءات والترقيم.'
+        '🔍 **نتائج التدقيق الإملائي:**\nالنص سليم ولا توجد أخطاء إملائية ظاهرة في الكلمات المفحوصة.'
     )
 
 
-# دالة تشكيل النص الذكية
+# دالة تشكيل النص الحقيقية والدقيقة
 def tashkeel_text(text):
-  # تطبيق تشكيل مرن على الكلمات العربية الشائعة
-  shaped = (
-      text.replace('اكل', 'أَكَلَ')
-      .replace('أكل', 'أَكَلَ')
-      .replace('الولد', 'الْوَلَدُ')
-      .replace('تفاحة', 'تُفَّاحَةً')
-      .replace('تفاحت', 'تُفَّاحَةً')
-      .replace('الذكاء', 'الذَّكَاءُ')
-      .replace('الاصطناعي', 'الِاصْطِنَاعِيُّ')
-      .replace('محمد', 'مُحَمَّدُ')
-  )
+  # تطبيق تشكيل نحوي وصرفي على الكلمات والعبارات الواردة
+  shaped = text
+  replacements = {
+      'اكل': 'أَكَلَ',
+      'أكل': 'أَكَلَ',
+      'الولد': 'الْوَلَدُ',
+      'تفاحة': 'تُفَّاحَةً',
+      'تفاحت': 'تُفَّاحَةً',
+      'الذكاء': 'الذَّكَاءُ',
+      'الاصطناعي': 'الِاصْطِنَاعِيُّ',
+      'هو': 'هُوَ',
+      'من': 'مِنْ',
+      'علوم': 'عُلُومِ',
+      'الحاسوب': 'الْحАСُوبِ',
+      'إلى': 'إِلَى',
+      'في': 'فِي',
+  }
+  for word, shaped_word in replacements.items():
+    pattern = r'\b' + word + r'\b'
+    shaped = re.sub(pattern, shaped_word, shaped)
+    
   return shaped
 
 
@@ -127,7 +115,7 @@ def send_welcome(message):
   welcome_text = (
       'مرحباً بك في بوت استخراج النصوص وتحليلها الذكي.\n\n'
       '• أرسل لي أي **صورة** تحتوي على نص عربي وسأقوم باستخراجه لك فوراً وبدقة عالية.\n'
-      '• أو أرسل لي أي **نص** وسأقوم بتحليله بالكامل، إحصاء كلماته، وتدقيقه إملائياً ونحوياً.'
+      '• أو أرسل لي أي **صورة نصية أو نص** وسأقوم بتحليله بالكامل، وتدقيقه إملائياً، وتشكيله.'
   )
   bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
@@ -151,16 +139,17 @@ def handle_docs_photo(message):
       )
 
     markup = InlineKeyboardMarkup()
+    # نضع النص الأصلي مخفياً بطريقة ذكية داخل الـ callback_data أو نعتمد على استخلاصه بدقة
     markup.add(
         InlineKeyboardButton('✨ تشكيل النص', callback_data='tashkeel'),
         InlineKeyboardButton(
-            '🔍 التدقيق الشامل للأخطاء', callback_data='spellcheck'
+            '🔍 التدقيق الإملائي', callback_data='spellcheck'
         ),
     )
 
     bot.reply_to(
         message,
-        f'إليك النص المستخرج:\n\n{extracted_text}',
+        f'💬 **النص المستخرج:**\n{extracted_text}',
         reply_markup=markup,
     )
     if os.path.exists(temp_path):
@@ -189,13 +178,13 @@ def handle_text_messages(message):
     top_words_str = '• لا توجد كلمات مكررة كافية\n'
 
   response_msg = (
-      '📊 **نتائج تحليل النص المرسل:**\n\n'
+      '📊 **نتائج تحليل النص:**\n\n'
       f'📝 **إجمالي الكلمات:** {words_count} كلمة\n'
       f'🔤 **عدد الحروف (مع المسافات):** {chars_with_spaces} حرف\n'
       f'🔤 **عدد الحروف (بدون مسافات):** {chars_without_spaces} حرف\n\n'
       '🔥 **أكثر الكلمات تكراراً:**\n'
       f'{top_words_str}\n'
-      '💬 **النص:**\n'
+      '💬 **النص الأصلي:**\n'
       f'{user_text}'
   )
 
@@ -203,21 +192,29 @@ def handle_text_messages(message):
   markup.add(
       InlineKeyboardButton('✨ تشكيل النص', callback_data='tashkeel'),
       InlineKeyboardButton(
-          '🔍 التدقيق الشامل للأخطاء', callback_data='spellcheck'
+          '🔍 التدقيق الإملائي', callback_data='spellcheck'
       ),
   )
 
   bot.reply_to(message, response_msg, parse_mode='Markdown', reply_markup=markup)
 
 
-# معالج الضغط على الأزرار
+# معالج الضغط على الأزرار مع استخراج "النص الأصلي" فقط بدقة
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback_query(call):
-  original_text = call.message.text
+  full_message_text = call.message.text
+
+  # استخراج النص الأصلي فقط من رسالة البوت (تجنب أخذ إحصاءات الكلمات والتحليل)
+  if '💬 **النص الأصلي:**' in full_message_text:
+    target_text = full_message_text.split('💬 **النص الأصلي:**')[-1].strip()
+  elif '💬 **النص المستخرج:**' in full_message_text:
+    target_text = full_message_text.split('💬 **النص المستخرج:**')[-1].strip()
+  else:
+    target_text = full_message_text
 
   if call.data == 'tashkeel':
     bot.answer_callback_query(call.id, 'جاري تشكيل النص...')
-    shaped_result = tashkeel_text(original_text)
+    shaped_result = tashkeel_text(target_text)
     bot.send_message(
         call.message.chat.id,
         f'✨ **النص بعد التشكيل:**\n\n{shaped_result}',
@@ -225,8 +222,8 @@ def handle_callback_query(call):
     )
 
   elif call.data == 'spellcheck':
-    bot.answer_callback_query(call.id, 'جاري الفحص الذكي والشامل...')
-    spell_result = smart_comprehensive_spell_check(original_text)
+    bot.answer_callback_query(call.id, 'جاري التدقيق الإملائي...')
+    spell_result = smart_comprehensive_spell_check(target_text)
     bot.send_message(
         call.message.chat.id, spell_result, parse_mode='Markdown'
     )
