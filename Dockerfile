@@ -1,6 +1,5 @@
 FROM python:3.9-slim
 
-# تثبيت نظام تيسيراكت ودعم اللغة العربية
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-ara \
